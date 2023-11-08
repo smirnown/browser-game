@@ -10,8 +10,8 @@
     </head>
     <body>
         <div class="row m-3">
-            <div class="col-1" id="game-board">
-                {{ block "game-board" .}}
+            <div class="col-2" id="game-board">
+                {{ block "game-board" . }}
                     {{ range .Board.Tiles }}
                         <div class="m-1">
                             {{ range . }}
@@ -25,34 +25,18 @@
             </div>
 
             <div class="col-1">
-                <h1 class="mb-2">Left</h1>
-                <form hx-post="/left/" hx-target="#game-board" hx-indicator="#spinner-left">
-                    <button type="submit" class="btn btn-primary">
-                        <span class="spinner-border spinner-border-sm htmx-indicator" id="spinner-left" role="status" aria-hidden="true"></span>
-                        Submit
-                    </button>
-                </form>
-                <h1 class="mb-2">Up</h1>
-                <form hx-post="/up/" hx-target="#game-board" hx-indicator="#spinner-up">
-                    <button type="submit" class="btn btn-primary">
-                        <span class="spinner-border spinner-border-sm htmx-indicator" id="spinner-up" role="status" aria-hidden="true"></span>
-                        Submit
-                    </button>
-                </form>
-                <h1 class="mb-2">Right</h1>
-                <form hx-post="/right/" hx-target="#game-board" hx-indicator="#spinner-right">
-                    <button type="submit" class="btn btn-primary">
-                        <span class="spinner-border spinner-border-sm htmx-indicator" id="spinner-right" role="status" aria-hidden="true"></span>
-                        Submit
-                    </button>
-                </form>
-                <h1 class="mb-2">Down</h1>
-                <form hx-post="/down/" hx-target="#game-board" hx-indicator="#spinner-down">
-                    <button type="submit" class="btn btn-primary">
-                        <span class="spinner-border spinner-border-sm htmx-indicator" id="spinner-down" role="status" aria-hidden="true"></span>
-                        Submit
-                    </button>
-                </form>
+                <button hx-post="/move/" hx-target="#game-board" hx-vals='{"direction": "up"}'>
+                    Up
+                </button>
+                <button hx-post="/move/" hx-target="#game-board" hx-vals='{"direction": "down"}'>
+                    Down
+                </button>
+                <button hx-post="/move/" hx-target="#game-board" hx-vals='{"direction": "left"}'>
+                    Left
+                </button>
+                <button hx-post="/move/" hx-target="#game-board" hx-vals='{"direction": "right"}'>
+                    Right
+                </button>
             </div>
         </div>
 
