@@ -89,36 +89,48 @@ func move(tiles [][]string, direction Direction) {
 
 func main() {
     fmt.Println("starting")
-    h1 := func (w http.ResponseWriter, r *http.Request) {
+    rootHandler := func (w http.ResponseWriter, r *http.Request) {
         tmpl := template.Must(template.ParseFiles("index.html"))
+        config := make(map[string]Board)
+        err := tmpl.Execute(w, config)
+        if err != nil {
+            panic(err)
+        }
+    }
+    http.HandleFunc("/", rootHandler)
+
+    initializeHandler := func (w http.ResponseWriter, r *http.Request) {
+        tmpl := template.Must(template.ParseFiles("game-board.html"))
         tiles := make([][]string, 5)
         for i := range tiles {
             tiles[i] = []string{"_", "_", "_", "_", "_"}
         }
         tiles[2][2] = "P"
-
         saveState(tiles)
-
         config := map[string] Board {
             "Board": Board { Tiles: tiles },
         }
-        tmpl.Execute(w, config)
+        err := tmpl.Execute(w, config)
+        if err != nil {
+            panic(err)
+        }
     }
-    http.HandleFunc("/", h1)
+    http.HandleFunc("/initialize/", initializeHandler)
 
     moveHandler := func (w http.ResponseWriter, r *http.Request) {
         d := r.PostFormValue("direction")
         direction := parseDirection(d)
-
         tiles := loadState()
         move(tiles, direction)
         saveState(tiles)
-
         config := map[string] Board {
             "Board": Board { Tiles: tiles },
         }
-        tmpl := template.Must(template.ParseFiles("index.html"))
-        tmpl.ExecuteTemplate(w, "game-board", config)
+        tmpl := template.Must(template.ParseFiles("game-board.html"))
+        err := tmpl.ExecuteTemplate(w, "game-board", config)
+        if err != nil {
+            panic(err)
+        }
     }
     http.HandleFunc("/move/", moveHandler)
 

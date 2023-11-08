@@ -9,36 +9,10 @@
         <title>Document</title>
     </head>
     <body>
-        <div class="row m-3">
-            <div class="col-2" id="game-board">
-                {{ block "game-board" . }}
-                    {{ range .Board.Tiles }}
-                        <div class="m-1">
-                            {{ range . }}
-                                <span class="m-1">
-                                    {{ . }}
-                                </span>
-                            {{ end }}
-                        </div>
-                    {{ end }}
-                {{ end }}
-            </div>
-
-            <div class="col-1">
-                <button hx-post="/move/" hx-target="#game-board" hx-vals='{"direction": "up"}'>
-                    Up
-                </button>
-                <button hx-post="/move/" hx-target="#game-board" hx-vals='{"direction": "down"}'>
-                    Down
-                </button>
-                <button hx-post="/move/" hx-target="#game-board" hx-vals='{"direction": "left"}'>
-                    Left
-                </button>
-                <button hx-post="/move/" hx-target="#game-board" hx-vals='{"direction": "right"}'>
-                    Right
-                </button>
-            </div>
+        <div id="screen">
+            <button hx-post="/initialize/" hx-target="#screen">
+                Start New Game
+            </button>
         </div>
-
     </body>
 </html>
