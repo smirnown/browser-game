@@ -67,16 +67,27 @@ func move(tiles [][]string, direction Direction) {
     for i, row := range tiles {
         for j, value := range row {
             if value == "P" {
-                tiles[i][j] = "_"
                 switch direction {
                     case Up:
-                        tiles[i - 1][j] = "P"
+                        if i > 0 {
+                            tiles[i][j] = "_"
+                            tiles[i - 1][j] = "P"
+                        }
                     case Down:
-                        tiles[i + 1][j] = "P"
+                        if i < len(tiles) - 1 {
+                            tiles[i][j] = "_"
+                            tiles[i + 1][j] = "P"
+                        }
                     case Left:
-                        tiles[i][j - 1] = "P"
+                        if j > 0 {
+                            tiles[i][j] = "_"
+                            tiles[i][j - 1] = "P"
+                        }
                     case Right:
-                        tiles[i][j + 1] = "P"
+                        if j < len(row) - 1 {
+                            tiles[i][j] = "_"
+                            tiles[i][j + 1] = "P"
+                        }
                     default:
                         panic("Unrecognized Direction")
                 }

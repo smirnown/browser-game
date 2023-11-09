@@ -20,6 +20,3 @@
 # Go workspace file
 go.work
 
-# Game state
-state.txt
-
