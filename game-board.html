@@ -13,17 +13,46 @@
         {{ end }}
     </div>
     <div class="col-1">
-        <button hx-post="/move/" hx-target="#game-board" hx-vals='{"direction": "up"}'>
-            Up
-        </button>
-        <button hx-post="/move/" hx-target="#game-board" hx-vals='{"direction": "down"}'>
-            Down
-        </button>
-        <button hx-post="/move/" hx-target="#game-board" hx-vals='{"direction": "left"}'>
-            Left
-        </button>
-        <button hx-post="/move/" hx-target="#game-board" hx-vals='{"direction": "right"}'>
-            Right
-        </button>
+        <form hx-post="/save/" hx-swap="none">
+            <button class="mb-1">Save game</button>
+            <input name="filename" placeholder="Save file name"></input>
+        </form>
+        <hr />
+        <h1>Controls</h1>
+        <div class="row">
+            <button
+                class="col-6"
+                hx-post="/move/"
+                hx-target="#game-board"
+                hx-vals='{"direction": "up"}'
+            >
+                Up
+            </button>
+            <button
+                class="col-6"
+                hx-post="/move/"
+                hx-target="#game-board"
+                hx-vals='{"direction": "down"}'
+            >
+                Down
+            </button>
+            <button
+                class="col-6"
+                hx-post="/move/"
+                hx-target="#game-board"
+                hx-vals='{"direction": "left"}'
+            >
+                Left
+            </button>
+            <button
+                class="col-6"
+                hx-post="/move/"
+                hx-target="#game-board"
+                hx-vals='{"direction": "right"}'
+            >
+                Right
+            </button>
+        </div>
     </div>
 </div>
+

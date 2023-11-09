@@ -3,6 +3,7 @@ package main
 import (
     "fmt"
     "html/template"
+    "io"
     "log"
     "net/http"
     "os"
@@ -13,20 +14,20 @@ type Board struct {
     Tiles [][]string
 }
 
-func saveState(tiles [][]string) {
+func saveState(tiles [][]string, filename string) {
     state := ""
     for _, row := range tiles {
         state = state + strings.Join(row, "")
     }
     data := []byte(state)
-    err := os.WriteFile("./state.txt", data, 0644)
+    err := os.WriteFile(fmt.Sprintf("./saves/%s.txt", filename), data, 0644)
     if err != nil {
         panic(err)
     }
 }
 
-func loadState() [][]string {
-    raw, err := os.ReadFile("./state.txt")
+func loadState(filename string) [][]string {
+    raw, err := os.ReadFile(fmt.Sprintf("./saves/%s.txt", filename))
     if err != nil {
         panic(err)
     }
@@ -117,7 +118,7 @@ func main() {
             tiles[i] = []string{"_", "_", "_", "_", "_"}
         }
         tiles[2][2] = "P"
-        saveState(tiles)
+        saveState(tiles, "state")
         config := map[string] Board {
             "Board": Board { Tiles: tiles },
         }
@@ -128,12 +129,45 @@ func main() {
     }
     http.HandleFunc("/initialize/", initializeHandler)
 
+    saveHandler := func (w http.ResponseWriter, r *http.Request) {
+        filename := r.PostFormValue("filename")
+        destination, err := os.Create(fmt.Sprintf("./saves/%s.txt", filename))
+        if err != nil {
+            panic(err)
+        }
+
+        source, err := os.Open("./saves/state.txt")
+        if err != nil {
+            panic(err)
+        }
+
+        _, err = io.Copy(destination, source)
+        if err != nil {
+            panic(err)
+        }
+    }
+    http.HandleFunc("/save/", saveHandler)
+
+    loadHandler := func (w http.ResponseWriter, r *http.Request) {
+        filename := r.PostFormValue("filename")
+        tiles := loadState(filename)
+        config := map[string] Board {
+            "Board": Board { Tiles: tiles },
+        }
+        tmpl := template.Must(template.ParseFiles("game-board.html"))
+        err := tmpl.Execute(w, config)
+        if err != nil {
+            panic(err)
+        }
+    }
+    http.HandleFunc("/load/", loadHandler)
+
     moveHandler := func (w http.ResponseWriter, r *http.Request) {
         d := r.PostFormValue("direction")
         direction := parseDirection(d)
-        tiles := loadState()
+        tiles := loadState("state")
         move(tiles, direction)
-        saveState(tiles)
+        saveState(tiles, "state")
         config := map[string] Board {
             "Board": Board { Tiles: tiles },
         }

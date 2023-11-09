@@ -13,6 +13,11 @@
             <button hx-post="/initialize/" hx-target="#screen">
                 Start New Game
             </button>
+            <form hx-post="/load/" hx-target="#screen">
+                <button>Load Game</button>
+                <input name="filename" placeholder="Name of file to load"></input>
+            </form>
         </div>
     </body>
 </html>
+
