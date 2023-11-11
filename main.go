@@ -10,10 +10,102 @@ import (
     "strings"
 )
 
+func main() {
+    fmt.Println("Registering handlers...")
+    http.HandleFunc("/", rootHandler)
+    http.HandleFunc("/initialize/", initializeHandler)
+    http.HandleFunc("/save/", saveHandler)
+    http.HandleFunc("/load/", loadHandler)
+    http.HandleFunc("/move/", moveHandler)
+
+    fmt.Println("Serving...")
+    log.Fatal(http.ListenAndServe(":8000", nil))
+}
+
+/***************************
+    HTTP HANDLERS
+***************************/
 type Board struct {
     Tiles [][]string
 }
 
+func rootHandler(w http.ResponseWriter, r *http.Request) {
+    tmpl := template.Must(template.ParseFiles("index.html"))
+    config := make(map[string]Board)
+    err := tmpl.Execute(w, config)
+    if err != nil {
+        panic(err)
+    }
+}
+
+func initializeHandler(w http.ResponseWriter, r *http.Request) {
+    tmpl := template.Must(template.ParseFiles("game-board.html"))
+    tiles := make([][]string, 5)
+    for i := range tiles {
+        tiles[i] = []string{"_", "_", "_", "_", "_"}
+    }
+    tiles[2][2] = "P"
+    saveState(tiles, "state")
+    config := map[string] Board {
+        "Board": Board { Tiles: tiles },
+    }
+    err := tmpl.Execute(w, config)
+    if err != nil {
+        panic(err)
+    }
+}
+
+func saveHandler(w http.ResponseWriter, r *http.Request) {
+    filename := r.PostFormValue("filename")
+    destination, err := os.Create(fmt.Sprintf("./saves/%s.txt", filename))
+    if err != nil {
+        panic(err)
+    }
+
+    source, err := os.Open("./saves/state.txt")
+    if err != nil {
+        panic(err)
+    }
+
+    _, err = io.Copy(destination, source)
+    if err != nil {
+        panic(err)
+    }
+}
+
+func loadHandler(w http.ResponseWriter, r *http.Request) {
+    filename := r.PostFormValue("filename")
+    tiles := loadState(filename)
+    saveState(tiles, "state")
+    config := map[string] Board {
+        "Board": Board { Tiles: tiles },
+    }
+    tmpl := template.Must(template.ParseFiles("game-board.html"))
+    err := tmpl.Execute(w, config)
+    if err != nil {
+        panic(err)
+    }
+}
+
+func moveHandler(w http.ResponseWriter, r *http.Request) {
+    d := r.PostFormValue("direction")
+    direction := parseDirection(d)
+    tiles := loadState("state")
+    move(tiles, direction)
+    saveState(tiles, "state")
+    config := map[string] Board {
+        "Board": Board { Tiles: tiles },
+    }
+    tmpl := template.Must(template.ParseFiles("game-board.html"))
+    err := tmpl.ExecuteTemplate(w, "game-board", config)
+    if err != nil {
+        panic(err)
+    }
+}
+
+/***************************
+    HELPERS
+***************************/
 func saveState(tiles [][]string, filename string) {
     state := ""
     for _, row := range tiles {
@@ -97,88 +189,5 @@ func move(tiles [][]string, direction Direction) {
         }
     }
     panic("Couldn't find player")
-}
-
-func main() {
-    fmt.Println("starting")
-    rootHandler := func (w http.ResponseWriter, r *http.Request) {
-        tmpl := template.Must(template.ParseFiles("index.html"))
-        config := make(map[string]Board)
-        err := tmpl.Execute(w, config)
-        if err != nil {
-            panic(err)
-        }
-    }
-    http.HandleFunc("/", rootHandler)
-
-    initializeHandler := func (w http.ResponseWriter, r *http.Request) {
-        tmpl := template.Must(template.ParseFiles("game-board.html"))
-        tiles := make([][]string, 5)
-        for i := range tiles {
-            tiles[i] = []string{"_", "_", "_", "_", "_"}
-        }
-        tiles[2][2] = "P"
-        saveState(tiles, "state")
-        config := map[string] Board {
-            "Board": Board { Tiles: tiles },
-        }
-        err := tmpl.Execute(w, config)
-        if err != nil {
-            panic(err)
-        }
-    }
-    http.HandleFunc("/initialize/", initializeHandler)
-
-    saveHandler := func (w http.ResponseWriter, r *http.Request) {
-        filename := r.PostFormValue("filename")
-        destination, err := os.Create(fmt.Sprintf("./saves/%s.txt", filename))
-        if err != nil {
-            panic(err)
-        }
-
-        source, err := os.Open("./saves/state.txt")
-        if err != nil {
-            panic(err)
-        }
-
-        _, err = io.Copy(destination, source)
-        if err != nil {
-            panic(err)
-        }
-    }
-    http.HandleFunc("/save/", saveHandler)
-
-    loadHandler := func (w http.ResponseWriter, r *http.Request) {
-        filename := r.PostFormValue("filename")
-        tiles := loadState(filename)
-        config := map[string] Board {
-            "Board": Board { Tiles: tiles },
-        }
-        tmpl := template.Must(template.ParseFiles("game-board.html"))
-        err := tmpl.Execute(w, config)
-        if err != nil {
-            panic(err)
-        }
-    }
-    http.HandleFunc("/load/", loadHandler)
-
-    moveHandler := func (w http.ResponseWriter, r *http.Request) {
-        d := r.PostFormValue("direction")
-        direction := parseDirection(d)
-        tiles := loadState("state")
-        move(tiles, direction)
-        saveState(tiles, "state")
-        config := map[string] Board {
-            "Board": Board { Tiles: tiles },
-        }
-        tmpl := template.Must(template.ParseFiles("game-board.html"))
-        err := tmpl.ExecuteTemplate(w, "game-board", config)
-        if err != nil {
-            panic(err)
-        }
-    }
-    http.HandleFunc("/move/", moveHandler)
-
-    log.Fatal(http.ListenAndServe(":8000", nil))
 }
 
