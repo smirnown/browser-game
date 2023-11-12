@@ -3,12 +3,15 @@ package main
 import (
     "fmt"
     "html/template"
-    "io"
     "log"
     "net/http"
     "os"
     "strings"
 )
+
+var commandChan = make(chan CommandPayload)
+var tilesChan = make(chan [][]string)
+var saveChan = make(chan bool)
 
 func main() {
     fmt.Println("Registering handlers...")
@@ -18,8 +21,64 @@ func main() {
     http.HandleFunc("/load/", loadHandler)
     http.HandleFunc("/move/", moveHandler)
 
+    go func() {
+        tiles := make([][]string, 5)
+        for {
+            fmt.Println("Polling...")
+            payload, ok := <- commandChan
+            if !ok {
+                fmt.Println("Not ok - breaking!")
+                break
+            }
+            fmt.Println(payload)
+            switch payload.Command {
+                case Initialize:
+                    tiles = make([][]string, 5)
+                    for i := range tiles {
+                        tiles[i] = []string{"_", "_", "_", "_", "_"}
+                    }
+                    tiles[2][2] = "P"
+                    tilesChan <- tiles
+                case MoveUp:
+                    move(tiles, Up)
+                    tilesChan <- tiles
+                case MoveDown:
+                    move(tiles, Down)
+                    tilesChan <- tiles
+                case MoveLeft:
+                    move(tiles, Left)
+                    tilesChan <- tiles
+                case MoveRight:
+                    move(tiles, Right)
+                    tilesChan <- tiles
+                case Save:
+                    err := saveState(tiles, payload.Data)
+                    saveChan <- err == nil
+                case Load:
+                    tiles = loadState(payload.Data)
+                    tilesChan <- tiles
+                default:
+                    panic("Unrecognized Command")
+            }
+        }
+    }()
     fmt.Println("Serving...")
     log.Fatal(http.ListenAndServe(":8000", nil))
+}
+
+type Command string
+const (
+    Initialize Command = "Initialize"
+    MoveUp Command = "MoveUp"
+    MoveDown Command = "MoveDown"
+    MoveLeft Command = "MoveLeft"
+    MoveRight Command = "MoveRight"
+    Save Command = "Save"
+    Load Command = "Load"
+)
+type CommandPayload struct {
+    Command Command
+    Data string
 }
 
 /***************************
@@ -40,12 +99,12 @@ func rootHandler(w http.ResponseWriter, r *http.Request) {
 
 func initializeHandler(w http.ResponseWriter, r *http.Request) {
     tmpl := template.Must(template.ParseFiles("game-board.html"))
-    tiles := make([][]string, 5)
-    for i := range tiles {
-        tiles[i] = []string{"_", "_", "_", "_", "_"}
+    payload := CommandPayload { Command: Initialize, Data: "" }
+    commandChan <- payload
+    tiles, ok := <- tilesChan
+    if !ok {
+        panic("Error initializing game")
     }
-    tiles[2][2] = "P"
-    saveState(tiles, "state")
     config := map[string] Board {
         "Board": Board { Tiles: tiles },
     }
@@ -57,26 +116,22 @@ func initializeHandler(w http.ResponseWriter, r *http.Request) {
 
 func saveHandler(w http.ResponseWriter, r *http.Request) {
     filename := r.PostFormValue("filename")
-    destination, err := os.Create(fmt.Sprintf("./saves/%s.txt", filename))
-    if err != nil {
-        panic(err)
-    }
-
-    source, err := os.Open("./saves/state.txt")
-    if err != nil {
-        panic(err)
-    }
-
-    _, err = io.Copy(destination, source)
-    if err != nil {
-        panic(err)
+    payload := CommandPayload { Command: Save, Data: filename }
+    commandChan <- payload
+    success := <- saveChan
+    if !success {
+        panic("Failed saving game!")
     }
 }
 
 func loadHandler(w http.ResponseWriter, r *http.Request) {
     filename := r.PostFormValue("filename")
-    tiles := loadState(filename)
-    saveState(tiles, "state")
+    payload := CommandPayload { Command: Load, Data: filename }
+    commandChan <- payload
+    tiles, ok := <- tilesChan
+    if !ok {
+        panic("Error loading game")
+    }
     config := map[string] Board {
         "Board": Board { Tiles: tiles },
     }
@@ -89,10 +144,13 @@ func loadHandler(w http.ResponseWriter, r *http.Request) {
 
 func moveHandler(w http.ResponseWriter, r *http.Request) {
     d := r.PostFormValue("direction")
-    direction := parseDirection(d)
-    tiles := loadState("state")
-    move(tiles, direction)
-    saveState(tiles, "state")
+    movementDirection := parseMovementDirection(d)
+    payload := CommandPayload { Command: movementDirection, Data: "" }
+    commandChan <- payload
+    tiles, ok := <- tilesChan
+    if !ok {
+        panic("Error initializing game")
+    }
     config := map[string] Board {
         "Board": Board { Tiles: tiles },
     }
@@ -106,16 +164,14 @@ func moveHandler(w http.ResponseWriter, r *http.Request) {
 /***************************
     HELPERS
 ***************************/
-func saveState(tiles [][]string, filename string) {
+func saveState(tiles [][]string, filename string) error {
     state := ""
     for _, row := range tiles {
         state = state + strings.Join(row, "")
     }
     data := []byte(state)
     err := os.WriteFile(fmt.Sprintf("./saves/%s.txt", filename), data, 0644)
-    if err != nil {
-        panic(err)
-    }
+    return err
 }
 
 func loadState(filename string) [][]string {
@@ -141,17 +197,17 @@ const (
     Right
 )
 
-var directionMap = map[string]Direction {
-    "up": Up,
-    "down": Down,
-    "left": Left,
-    "right": Right,
+var MovementDirectionMap = map[string]Command {
+    "MoveUp": MoveUp,
+    "MoveDown": MoveDown,
+    "MoveLeft": MoveLeft,
+    "MoveRight": MoveRight,
 }
 
-func parseDirection(value string) Direction {
-    direction, ok := directionMap[value]
+func parseMovementDirection(value string) Command {
+    direction, ok := MovementDirectionMap[value]
     if !ok {
-        panic("Couldn't determine direction!")
+        panic("Couldn't determine movement direction!")
     }
     return direction
 }
