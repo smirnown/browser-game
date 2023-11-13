@@ -1,6 +1,7 @@
 package main
 
 import (
+    "errors"
     "fmt"
     "html/template"
     "log"
@@ -9,8 +10,28 @@ import (
     "strings"
 )
 
+type CommandPayload struct {
+    command Command
+    data string
+}
+type Command string
+const (
+    Initialize Command = "Initialize"
+    MoveUp Command = "MoveUp"
+    MoveDown Command = "MoveDown"
+    MoveLeft Command = "MoveLeft"
+    MoveRight Command = "MoveRight"
+    Save Command = "Save"
+    Load Command = "Load"
+)
+
+type TilesChannelResponse struct {
+    tiles [][]string
+    err error
+}
+
 var commandChan = make(chan CommandPayload)
-var tilesChan = make(chan [][]string)
+var tilesChan = make(chan TilesChannelResponse)
 var saveChan = make(chan bool)
 
 func main() {
@@ -24,61 +45,48 @@ func main() {
     go func() {
         tiles := make([][]string, 5)
         for {
-            fmt.Println("Polling...")
             payload, ok := <- commandChan
             if !ok {
-                fmt.Println("Not ok - breaking!")
                 break
             }
-            fmt.Println(payload)
-            switch payload.Command {
+            switch payload.command {
                 case Initialize:
                     tiles = make([][]string, 5)
                     for i := range tiles {
                         tiles[i] = []string{"_", "_", "_", "_", "_"}
                     }
                     tiles[2][2] = "P"
-                    tilesChan <- tiles
+                    tilesChan <- TilesChannelResponse { tiles, nil }
                 case MoveUp:
-                    move(tiles, Up)
-                    tilesChan <- tiles
+                    err := move(tiles, Up)
+                    resp := TilesChannelResponse{ tiles, err }
+                    tilesChan <- resp
                 case MoveDown:
-                    move(tiles, Down)
-                    tilesChan <- tiles
+                    err := move(tiles, Down)
+                    resp := TilesChannelResponse{ tiles, err }
+                    tilesChan <- resp
                 case MoveLeft:
-                    move(tiles, Left)
-                    tilesChan <- tiles
+                    err := move(tiles, Left)
+                    resp := TilesChannelResponse{ tiles, err }
+                    tilesChan <- resp
                 case MoveRight:
-                    move(tiles, Right)
-                    tilesChan <- tiles
+                    err := move(tiles, Right)
+                    resp := TilesChannelResponse{ tiles, err }
+                    tilesChan <- resp
                 case Save:
-                    err := saveState(tiles, payload.Data)
+                    err := saveState(tiles, payload.data)
                     saveChan <- err == nil
                 case Load:
-                    tiles = loadState(payload.Data)
-                    tilesChan <- tiles
+                    tiles, err := loadState(payload.data)
+                    resp := TilesChannelResponse{ tiles, err }
+                    tilesChan <- resp
                 default:
-                    panic("Unrecognized Command")
+                    log.Fatal("Unrecognized Command")
             }
         }
     }()
     fmt.Println("Serving...")
     log.Fatal(http.ListenAndServe(":8000", nil))
-}
-
-type Command string
-const (
-    Initialize Command = "Initialize"
-    MoveUp Command = "MoveUp"
-    MoveDown Command = "MoveDown"
-    MoveLeft Command = "MoveLeft"
-    MoveRight Command = "MoveRight"
-    Save Command = "Save"
-    Load Command = "Load"
-)
-type CommandPayload struct {
-    Command Command
-    Data string
 }
 
 /***************************
@@ -99,14 +107,14 @@ func rootHandler(w http.ResponseWriter, r *http.Request) {
 
 func initializeHandler(w http.ResponseWriter, r *http.Request) {
     tmpl := template.Must(template.ParseFiles("game-board.html"))
-    payload := CommandPayload { Command: Initialize, Data: "" }
+    payload := CommandPayload { command: Initialize, data: "" }
     commandChan <- payload
-    tiles, ok := <- tilesChan
-    if !ok {
+    resp := <- tilesChan
+    if resp.err != nil {
         panic("Error initializing game")
     }
     config := map[string] Board {
-        "Board": Board { Tiles: tiles },
+        "Board": Board { Tiles: resp.tiles },
     }
     err := tmpl.Execute(w, config)
     if err != nil {
@@ -116,7 +124,7 @@ func initializeHandler(w http.ResponseWriter, r *http.Request) {
 
 func saveHandler(w http.ResponseWriter, r *http.Request) {
     filename := r.PostFormValue("filename")
-    payload := CommandPayload { Command: Save, Data: filename }
+    payload := CommandPayload { command: Save, data: filename }
     commandChan <- payload
     success := <- saveChan
     if !success {
@@ -126,14 +134,14 @@ func saveHandler(w http.ResponseWriter, r *http.Request) {
 
 func loadHandler(w http.ResponseWriter, r *http.Request) {
     filename := r.PostFormValue("filename")
-    payload := CommandPayload { Command: Load, Data: filename }
+    payload := CommandPayload { command: Load, data: filename }
     commandChan <- payload
-    tiles, ok := <- tilesChan
-    if !ok {
+    resp := <- tilesChan
+    if resp.err != nil {
         panic("Error loading game")
     }
     config := map[string] Board {
-        "Board": Board { Tiles: tiles },
+        "Board": Board { Tiles: resp.tiles },
     }
     tmpl := template.Must(template.ParseFiles("game-board.html"))
     err := tmpl.Execute(w, config)
@@ -145,14 +153,14 @@ func loadHandler(w http.ResponseWriter, r *http.Request) {
 func moveHandler(w http.ResponseWriter, r *http.Request) {
     d := r.PostFormValue("direction")
     movementDirection := parseMovementDirection(d)
-    payload := CommandPayload { Command: movementDirection, Data: "" }
+    payload := CommandPayload { command: movementDirection, data: "" }
     commandChan <- payload
-    tiles, ok := <- tilesChan
-    if !ok {
+    resp := <- tilesChan
+    if resp.err != nil {
         panic("Error initializing game")
     }
     config := map[string] Board {
-        "Board": Board { Tiles: tiles },
+        "Board": Board { Tiles: resp.tiles },
     }
     tmpl := template.Must(template.ParseFiles("game-board.html"))
     err := tmpl.ExecuteTemplate(w, "game-board", config)
@@ -174,10 +182,10 @@ func saveState(tiles [][]string, filename string) error {
     return err
 }
 
-func loadState(filename string) [][]string {
+func loadState(filename string) ([][]string, error) {
     raw, err := os.ReadFile(fmt.Sprintf("./saves/%s.txt", filename))
     if err != nil {
-        panic(err)
+        return nil, err
     }
     data := string(raw)
     tiles := make([][]string, 5)
@@ -186,7 +194,7 @@ func loadState(filename string) [][]string {
     tiles[2] = strings.Split(data[10:15], "")
     tiles[3] = strings.Split(data[15:20], "")
     tiles[4] = strings.Split(data[20:25], "")
-    return tiles
+    return tiles, nil
 }
 
 type Direction int
@@ -212,7 +220,7 @@ func parseMovementDirection(value string) Command {
     return direction
 }
 
-func move(tiles [][]string, direction Direction) {
+func move(tiles [][]string, direction Direction) error {
     for i, row := range tiles {
         for j, value := range row {
             if value == "P" {
@@ -238,12 +246,12 @@ func move(tiles [][]string, direction Direction) {
                             tiles[i][j + 1] = "P"
                         }
                     default:
-                        panic("Unrecognized Direction")
+                        return errors.New("Unrecognized Direction")
                 }
-                return
+                return nil
             }
         }
     }
-    panic("Couldn't find player")
+    return errors.New("Couldn't find player")
 }
 
