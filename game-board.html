@@ -1,5 +1,5 @@
 <div class="row m-3" id="game-ui">
-    <div class="col-2" id="game-board">
+    <div class="col-1 bg-light" id="game-board">
         {{ block "game-board" . }}
             {{ range .Board.Tiles }}
                 <div class="m-1">
@@ -12,6 +12,7 @@
             {{ end }}
         {{ end }}
     </div>
+    <div class="col-1"></div>
     <div class="col-1">
         <form hx-post="/save/" hx-swap="none">
             <button class="mb-1">Save game</button>
