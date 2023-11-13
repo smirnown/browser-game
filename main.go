@@ -1,12 +1,14 @@
 package main
 
 import (
+    "bufio"
     "errors"
     "fmt"
     "html/template"
     "log"
     "net/http"
     "os"
+    "strconv"
     "strings"
 )
 
@@ -27,13 +29,13 @@ const (
     Load Command = "Load"
 )
 
-type TilesChannelResponse struct {
-    tiles [][]string
+type StateChannelResponse struct {
+    state GameState
     err error
 }
 
 var commandChan = make(chan CommandPayload)
-var tilesChan = make(chan TilesChannelResponse)
+var stateChan = make(chan StateChannelResponse)
 var saveChan = make(chan bool)
 
 func main() {
@@ -45,7 +47,10 @@ func main() {
     http.HandleFunc("/move/", moveHandler)
 
     go func() {
-        tiles := make([][]string, BOARD_SIZE)
+        state := GameState {
+            Tiles: make([][]string, BOARD_SIZE),
+            Money: 0,
+        }
         for {
             payload, ok := <- commandChan
             if !ok {
@@ -53,39 +58,41 @@ func main() {
             }
             switch payload.command {
                 case Initialize:
-                    tiles = make([][]string, BOARD_SIZE)
-                    for i := range tiles {
-                        tiles[i] = make([]string, BOARD_SIZE)
+                    state.Tiles = make([][]string, BOARD_SIZE)
+                    for i := range state.Tiles {
+                        state.Tiles[i] = make([]string, BOARD_SIZE)
                         for j := 0; j < BOARD_SIZE; j++ {
-                            tiles[i][j] = "_"
+                            state.Tiles[i][j] = "_"
                         }
                     }
-                    tiles[2][2] = "P"
-                    tilesChan <- TilesChannelResponse { tiles, nil }
+                    state.Tiles[2][2] = "P"
+                    state.Tiles[2][4] = "$"
+                    state.Money = 0
+                    stateChan <- StateChannelResponse { state, nil }
                 case MoveUp:
-                    err := move(tiles, Up)
-                    resp := TilesChannelResponse{ tiles, err }
-                    tilesChan <- resp
+                    err := move(&state, Up)
+                    resp := StateChannelResponse{ state, err }
+                    stateChan <- resp
                 case MoveDown:
-                    err := move(tiles, Down)
-                    resp := TilesChannelResponse{ tiles, err }
-                    tilesChan <- resp
+                    err := move(&state, Down)
+                    resp := StateChannelResponse{ state, err }
+                    stateChan <- resp
                 case MoveLeft:
-                    err := move(tiles, Left)
-                    resp := TilesChannelResponse{ tiles, err }
-                    tilesChan <- resp
+                    err := move(&state, Left)
+                    resp := StateChannelResponse{ state, err }
+                    stateChan <- resp
                 case MoveRight:
-                    err := move(tiles, Right)
-                    resp := TilesChannelResponse{ tiles, err }
-                    tilesChan <- resp
+                    err := move(&state, Right)
+                    resp := StateChannelResponse{ state, err }
+                    stateChan <- resp
                 case Save:
-                    err := saveState(tiles, payload.data)
+                    err := saveState(state, payload.data)
                     saveChan <- err == nil
                 case Load:
-                    var err error
-                    tiles, err = loadState(payload.data)
-                    resp := TilesChannelResponse{ tiles, err }
-                    tilesChan <- resp
+                    statePointer, err := loadState(payload.data)
+                    state = *statePointer
+                    resp := StateChannelResponse{ state, err }
+                    stateChan <- resp
                 default:
                     log.Fatal("Unrecognized Command")
             }
@@ -98,13 +105,14 @@ func main() {
 /***************************
     HTTP HANDLERS
 ***************************/
-type Board struct {
+type GameState struct {
     Tiles [][]string
+    Money int
 }
 
 func rootHandler(w http.ResponseWriter, r *http.Request) {
     tmpl := template.Must(template.ParseFiles("index.html"))
-    config := make(map[string]Board)
+    config := make(map[string]GameState)
     err := tmpl.Execute(w, config)
     if err != nil {
         panic(err)
@@ -115,12 +123,12 @@ func initializeHandler(w http.ResponseWriter, r *http.Request) {
     tmpl := template.Must(template.ParseFiles("game-board.html"))
     payload := CommandPayload { command: Initialize, data: "" }
     commandChan <- payload
-    resp := <- tilesChan
+    resp := <- stateChan
     if resp.err != nil {
         panic("Error initializing game")
     }
-    config := map[string] Board {
-        "Board": Board { Tiles: resp.tiles },
+    config := map[string] GameState {
+        "GameState": resp.state,
     }
     err := tmpl.Execute(w, config)
     if err != nil {
@@ -142,12 +150,12 @@ func loadHandler(w http.ResponseWriter, r *http.Request) {
     filename := r.PostFormValue("filename")
     payload := CommandPayload { command: Load, data: filename }
     commandChan <- payload
-    resp := <- tilesChan
+    resp := <- stateChan
     if resp.err != nil {
         panic("Error loading game")
     }
-    config := map[string] Board {
-        "Board": Board { Tiles: resp.tiles },
+    config := map[string] GameState {
+        "GameState": resp.state,
     }
     tmpl := template.Must(template.ParseFiles("game-board.html"))
     err := tmpl.Execute(w, config)
@@ -161,12 +169,12 @@ func moveHandler(w http.ResponseWriter, r *http.Request) {
     movementDirection := parseMovementDirection(d)
     payload := CommandPayload { command: movementDirection, data: "" }
     commandChan <- payload
-    resp := <- tilesChan
+    resp := <- stateChan
     if resp.err != nil {
         panic("Error initializing game")
     }
-    config := map[string] Board {
-        "Board": Board { Tiles: resp.tiles },
+    config := map[string]GameState {
+        "GameState": resp.state,
     }
     tmpl := template.Must(template.ParseFiles("game-board.html"))
     err := tmpl.ExecuteTemplate(w, "game-board", config)
@@ -178,29 +186,45 @@ func moveHandler(w http.ResponseWriter, r *http.Request) {
 /***************************
     HELPERS
 ***************************/
-func saveState(tiles [][]string, filename string) error {
-    state := ""
-    for _, row := range tiles {
-        state = state + strings.Join(row, "")
+func saveState(state GameState, filename string) error {
+    data := ""
+    for _, row := range state.Tiles {
+        data = data + strings.Join(row, "")
     }
-    data := []byte(state)
-    err := os.WriteFile(fmt.Sprintf("./saves/%s.txt", filename), data, 0644)
+    data += "\n" + strconv.Itoa(state.Money)
+    bytes := []byte(data)
+    err := os.WriteFile(fmt.Sprintf("./saves/%s.txt", filename), bytes, 0644)
     return err
 }
 
-func loadState(filename string) ([][]string, error) {
-    raw, err := os.ReadFile(fmt.Sprintf("./saves/%s.txt", filename))
+func loadState(filename string) (*GameState, error) {
+    file, err := os.Open(fmt.Sprintf("./saves/%s.txt", filename))
     if err != nil {
         return nil, err
     }
-    data := string(raw)
+    defer file.Close()
+
+    scanner := bufio.NewScanner(file)
+
+    // First line is tiles
+    scanner.Scan()
+    data := scanner.Text()
     tiles := make([][]string, BOARD_SIZE)
     last := 0
     for i := 0; i < BOARD_SIZE; i++ {
-        tiles[i] = strings.Split(data[last:last + 5], "")
-        last += 5
+        tiles[i] = strings.Split(data[last:last + BOARD_SIZE], "")
+        last += BOARD_SIZE
     }
-    return tiles, nil
+
+    // Second line is money count
+    scanner.Scan()
+    money, err := strconv.Atoi(scanner.Text())
+    if err != nil {
+        return nil, err
+    }
+
+    state := GameState { tiles, money }
+    return &state, nil
 }
 
 type Direction int
@@ -226,30 +250,42 @@ func parseMovementDirection(value string) Command {
     return direction
 }
 
-func move(tiles [][]string, direction Direction) error {
-    for i, row := range tiles {
+func move(state *GameState, direction Direction) error {
+    for i, row := range state.Tiles {
         for j, value := range row {
             if value == "P" {
                 switch direction {
                     case Up:
                         if i > 0 {
-                            tiles[i][j] = "_"
-                            tiles[i - 1][j] = "P"
+                            if state.Tiles[i - 1][j] == "$" {
+                                state.Money += 1
+                            }
+                            state.Tiles[i][j] = "_"
+                            state.Tiles[i - 1][j] = "P"
                         }
                     case Down:
-                        if i < len(tiles) - 1 {
-                            tiles[i][j] = "_"
-                            tiles[i + 1][j] = "P"
+                        if i < len(state.Tiles) - 1 {
+                            if state.Tiles[i + 1][j] == "$" {
+                                state.Money += 1
+                            }
+                            state.Tiles[i][j] = "_"
+                            state.Tiles[i + 1][j] = "P"
                         }
                     case Left:
                         if j > 0 {
-                            tiles[i][j] = "_"
-                            tiles[i][j - 1] = "P"
+                            if state.Tiles[i][j - 1] == "$" {
+                                state.Money += 1
+                            }
+                            state.Tiles[i][j] = "_"
+                            state.Tiles[i][j - 1] = "P"
                         }
                     case Right:
                         if j < len(row) - 1 {
-                            tiles[i][j] = "_"
-                            tiles[i][j + 1] = "P"
+                            if state.Tiles[i][j + 1] == "$" {
+                                state.Money += 1
+                            }
+                            state.Tiles[i][j] = "_"
+                            state.Tiles[i][j + 1] = "P"
                         }
                     default:
                         return errors.New("Unrecognized Direction")
