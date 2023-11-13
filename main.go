@@ -10,6 +10,8 @@ import (
     "strings"
 )
 
+var BOARD_SIZE = 10
+
 type CommandPayload struct {
     command Command
     data string
@@ -43,7 +45,7 @@ func main() {
     http.HandleFunc("/move/", moveHandler)
 
     go func() {
-        tiles := make([][]string, 5)
+        tiles := make([][]string, BOARD_SIZE)
         for {
             payload, ok := <- commandChan
             if !ok {
@@ -51,9 +53,12 @@ func main() {
             }
             switch payload.command {
                 case Initialize:
-                    tiles = make([][]string, 5)
+                    tiles = make([][]string, BOARD_SIZE)
                     for i := range tiles {
-                        tiles[i] = []string{"_", "_", "_", "_", "_"}
+                        tiles[i] = make([]string, BOARD_SIZE)
+                        for j := 0; j < BOARD_SIZE; j++ {
+                            tiles[i][j] = "_"
+                        }
                     }
                     tiles[2][2] = "P"
                     tilesChan <- TilesChannelResponse { tiles, nil }
@@ -77,7 +82,8 @@ func main() {
                     err := saveState(tiles, payload.data)
                     saveChan <- err == nil
                 case Load:
-                    tiles, err := loadState(payload.data)
+                    var err error
+                    tiles, err = loadState(payload.data)
                     resp := TilesChannelResponse{ tiles, err }
                     tilesChan <- resp
                 default:
@@ -188,12 +194,12 @@ func loadState(filename string) ([][]string, error) {
         return nil, err
     }
     data := string(raw)
-    tiles := make([][]string, 5)
-    tiles[0] = strings.Split(data[0:5], "")
-    tiles[1] = strings.Split(data[5:10], "")
-    tiles[2] = strings.Split(data[10:15], "")
-    tiles[3] = strings.Split(data[15:20], "")
-    tiles[4] = strings.Split(data[20:25], "")
+    tiles := make([][]string, BOARD_SIZE)
+    last := 0
+    for i := 0; i < BOARD_SIZE; i++ {
+        tiles[i] = strings.Split(data[last:last + 5], "")
+        last += 5
+    }
     return tiles, nil
 }
 
