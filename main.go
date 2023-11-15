@@ -67,6 +67,9 @@ func main() {
                     }
                     state.Tiles[2][2] = "P"
                     state.Tiles[2][4] = "$"
+                    for i := 0; i < BOARD_SIZE; i++ {
+                        state.Tiles[i][5] = "W"
+                    }
                     state.Money = 0
                     stateChan <- StateChannelResponse { state, nil }
                 case MoveUp:
@@ -257,32 +260,44 @@ func move(state *GameState, direction Direction) error {
                 switch direction {
                     case Up:
                         if i > 0 {
-                            if state.Tiles[i - 1][j] == "$" {
+                            next := state.Tiles[i - 1][j]
+                            if next == "$" {
                                 state.Money += 1
+                            } else if next == "W" {
+                                return nil
                             }
                             state.Tiles[i][j] = "_"
                             state.Tiles[i - 1][j] = "P"
                         }
                     case Down:
                         if i < len(state.Tiles) - 1 {
-                            if state.Tiles[i + 1][j] == "$" {
+                            next := state.Tiles[i + 1][j]
+                            if next == "$" {
                                 state.Money += 1
+                            } else if next == "W" {
+                                return nil
                             }
                             state.Tiles[i][j] = "_"
                             state.Tiles[i + 1][j] = "P"
                         }
                     case Left:
                         if j > 0 {
-                            if state.Tiles[i][j - 1] == "$" {
+                            next := state.Tiles[i][j - 1]
+                            if next == "$" {
                                 state.Money += 1
+                            } else if next == "W" {
+                                return nil
                             }
                             state.Tiles[i][j] = "_"
                             state.Tiles[i][j - 1] = "P"
                         }
                     case Right:
                         if j < len(row) - 1 {
-                            if state.Tiles[i][j + 1] == "$" {
+                            next := state.Tiles[i][j + 1]
+                            if next == "$" {
                                 state.Money += 1
+                            } else if next == "W" {
+                                return nil
                             }
                             state.Tiles[i][j] = "_"
                             state.Tiles[i][j + 1] = "P"
