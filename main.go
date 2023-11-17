@@ -54,6 +54,7 @@ func main() {
         state := GameState {
             Tiles: make([][]string, BOARD_SIZE),
             Money: 0,
+            leverMap: make(map[Point]Point),
         }
         for {
             payload, ok := <- commandChan
@@ -75,6 +76,12 @@ func main() {
                         if i == 2 {
                             state.Tiles[i][6] = "H"
                             state.Tiles[8][1] = "I"
+                            state.leverMap[Point {8, 1}] = Point {i, 6}
+                            continue
+                        } else if i == 9 {
+                            state.Tiles[i][6] = "H"
+                            state.Tiles[2][1] = "I"
+                            state.leverMap[Point {2, 1}] = Point {i, 6}
                             continue
                         }
                         state.Tiles[i][6] = "W"
@@ -124,6 +131,12 @@ func main() {
 type GameState struct {
     Tiles [][]string
     Money int
+    leverMap map[Point]Point
+}
+
+type Point struct {
+    x int
+    y int
 }
 
 func rootHandler(w http.ResponseWriter, r *http.Request) {
@@ -225,6 +238,11 @@ func saveState(state GameState, filename string) error {
         data = data + strings.Join(row, "")
     }
     data += "\n" + strconv.Itoa(state.Money)
+    data += "\nLever map start"
+    for lever, gate := range state.leverMap {
+        data += fmt.Sprintf("\n%d,%d:%d,%d", lever.x, lever.y, gate.x, gate.y)
+    }
+    data += "\nLever map end"
     bytes := []byte(data)
     err := os.WriteFile(fmt.Sprintf("./saves/%s.txt", filename), bytes, 0644)
     return err
@@ -256,7 +274,44 @@ func loadState(filename string) (*GameState, error) {
         return nil, err
     }
 
-    state := GameState { tiles, money }
+    // leverMap starts after "Lever map start" and ends with "Lever map end"
+    scanner.Scan()
+    if scanner.Text() != "Lever map start" {
+        return nil, errors.New("Lever map not found in save file")
+    }
+    leverMap := make(map[Point]Point)
+    for {
+        scanner.Scan()
+        line := scanner.Text()
+        if line == "Lever map end" {
+            break
+        }
+        pair := strings.Split(line, ":")
+        leverCoords := strings.Split(pair[0], ",")
+        leverX, err := strconv.Atoi(leverCoords[0])
+        if err != nil {
+            return nil, err
+        }
+        leverY, err := strconv.Atoi(leverCoords[1])
+        if err != nil {
+            return nil, err
+        }
+        lever := Point { leverX, leverY }
+
+        gateCoords := strings.Split(pair[1], ",")
+        gateX, err := strconv.Atoi(gateCoords[0])
+        if err != nil {
+            return nil, err
+        }
+        gateY, err := strconv.Atoi(gateCoords[1])
+        if err != nil {
+            return nil, err
+        }
+        gate := Point { gateX, gateY }
+        leverMap[lever] = gate
+    }
+
+    state := GameState { tiles, money, leverMap }
     return &state, nil
 }
 
@@ -346,22 +401,62 @@ func interact(state *GameState) error {
     for i, row := range state.Tiles {
         for j, value := range row {
             if value == "P" {
-                if state.Tiles[i - 1][j] == "I" {
+                if i > 0 && state.Tiles[i - 1][j] == "I" {
+                    gate, ok := state.leverMap[Point { i - 1, j}]
+                    if !ok {
+                        return errors.New("Lever doesn't exist in map!")
+                    }
                     state.Tiles[i - 1][j] = "i"
-                } else if state.Tiles[i - 1][j] == "i" {
+                    state.Tiles[gate.x][gate.y] = "_"
+                } else if i > 0 && state.Tiles[i - 1][j] == "i" {
+                    gate, ok := state.leverMap[Point { i - 1, j}]
+                    if !ok {
+                        return errors.New("Lever doesn't exist in map!")
+                    }
                     state.Tiles[i - 1][j] = "I"
-                } else if state.Tiles[i + 1][j] == "I" {
+                    state.Tiles[gate.x][gate.y] = "H"
+                } else if i < BOARD_SIZE - 1 && state.Tiles[i + 1][j] == "I" {
+                    gate, ok := state.leverMap[Point { i + 1, j}]
+                    if !ok {
+                        return errors.New("Lever doesn't exist in map!")
+                    }
                     state.Tiles[i + 1][j] = "i"
-                } else if state.Tiles[i + 1][j] == "i" {
+                    state.Tiles[gate.x][gate.y] = "_"
+                } else if i < BOARD_SIZE - 1 && state.Tiles[i + 1][j] == "i" {
+                    gate, ok := state.leverMap[Point { i + 1, j}]
+                    if !ok {
+                        return errors.New("Lever doesn't exist in map!")
+                    }
                     state.Tiles[i + 1][j] = "I"
-                } else if state.Tiles[i][j - 1] == "I" {
+                    state.Tiles[gate.x][gate.y] = "H"
+                } else if j > 0 && state.Tiles[i][j - 1] == "I" {
+                    gate, ok := state.leverMap[Point { i, j - 1}]
+                    if !ok {
+                        return errors.New("Lever doesn't exist in map!")
+                    }
                     state.Tiles[i][j - 1] = "i"
-                } else if state.Tiles[i][j - 1] == "i" {
+                    state.Tiles[gate.x][gate.y] = "_"
+                } else if j > 0 && state.Tiles[i][j - 1] == "i" {
+                    gate, ok := state.leverMap[Point { i, j - 1}]
+                    if !ok {
+                        return errors.New("Lever doesn't exist in map!")
+                    }
                     state.Tiles[i][j - 1] = "I"
-                } else if state.Tiles[i][j + 1] == "I" {
+                    state.Tiles[gate.x][gate.y] = "H"
+                } else if j < BOARD_SIZE - 1 && state.Tiles[i][j + 1] == "I" {
+                    gate, ok := state.leverMap[Point { i, j + 1}]
+                    if !ok {
+                        return errors.New("Lever doesn't exist in map!")
+                    }
                     state.Tiles[i][j + 1] = "i"
-                } else if state.Tiles[i][j + 1] == "i" {
+                    state.Tiles[gate.x][gate.y] = "_"
+                } else if j < BOARD_SIZE - 1 && state.Tiles[i][j + 1] == "i" {
+                    gate, ok := state.leverMap[Point { i, j + 1}]
+                    if !ok {
+                        return errors.New("Lever doesn't exist in map!")
+                    }
                     state.Tiles[i][j + 1] = "I"
+                    state.Tiles[gate.x][gate.y] = "H"
                 }
                 return nil
             }
