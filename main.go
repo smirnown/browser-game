@@ -8,11 +8,13 @@ import (
     "log"
     "net/http"
     "os"
+    "slices"
     "strconv"
     "strings"
 )
 
 var BOARD_SIZE = 10
+var UNPASSABLE = []string {"W", "H", "I", "i"}
 
 type CommandPayload struct {
     command Command
@@ -25,6 +27,7 @@ const (
     MoveDown Command = "MoveDown"
     MoveLeft Command = "MoveLeft"
     MoveRight Command = "MoveRight"
+    Interact Command = "Interact"
     Save Command = "Save"
     Load Command = "Load"
 )
@@ -45,6 +48,7 @@ func main() {
     http.HandleFunc("/save/", saveHandler)
     http.HandleFunc("/load/", loadHandler)
     http.HandleFunc("/move/", moveHandler)
+    http.HandleFunc("/interact/", interactHandler)
 
     go func() {
         state := GameState {
@@ -65,10 +69,15 @@ func main() {
                             state.Tiles[i][j] = "_"
                         }
                     }
-                    state.Tiles[2][2] = "P"
-                    state.Tiles[2][4] = "$"
+                    state.Tiles[3][2] = "P"
+                    state.Tiles[8][8] = "$"
                     for i := 0; i < BOARD_SIZE; i++ {
-                        state.Tiles[i][5] = "W"
+                        if i == 2 {
+                            state.Tiles[i][6] = "H"
+                            state.Tiles[8][1] = "I"
+                            continue
+                        }
+                        state.Tiles[i][6] = "W"
                     }
                     state.Money = 0
                     stateChan <- StateChannelResponse { state, nil }
@@ -86,6 +95,10 @@ func main() {
                     stateChan <- resp
                 case MoveRight:
                     err := move(&state, Right)
+                    resp := StateChannelResponse{ state, err }
+                    stateChan <- resp
+                case Interact:
+                    err := interact(&state)
                     resp := StateChannelResponse{ state, err }
                     stateChan <- resp
                 case Save:
@@ -128,7 +141,7 @@ func initializeHandler(w http.ResponseWriter, r *http.Request) {
     commandChan <- payload
     resp := <- stateChan
     if resp.err != nil {
-        panic("Error initializing game")
+        panic(resp.err)
     }
     config := map[string] GameState {
         "GameState": resp.state,
@@ -155,7 +168,7 @@ func loadHandler(w http.ResponseWriter, r *http.Request) {
     commandChan <- payload
     resp := <- stateChan
     if resp.err != nil {
-        panic("Error loading game")
+        panic(resp.err)
     }
     config := map[string] GameState {
         "GameState": resp.state,
@@ -174,7 +187,24 @@ func moveHandler(w http.ResponseWriter, r *http.Request) {
     commandChan <- payload
     resp := <- stateChan
     if resp.err != nil {
-        panic("Error initializing game")
+        panic(resp.err)
+    }
+    config := map[string]GameState {
+        "GameState": resp.state,
+    }
+    tmpl := template.Must(template.ParseFiles("game-board.html"))
+    err := tmpl.ExecuteTemplate(w, "game-board", config)
+    if err != nil {
+        panic(err)
+    }
+}
+
+func interactHandler(w http.ResponseWriter, r *http.Request) {
+    payload := CommandPayload { command: Interact, data: "" }
+    commandChan <- payload
+    resp := <- stateChan
+    if resp.err != nil {
+        panic(resp.err)
     }
     config := map[string]GameState {
         "GameState": resp.state,
@@ -263,7 +293,7 @@ func move(state *GameState, direction Direction) error {
                             next := state.Tiles[i - 1][j]
                             if next == "$" {
                                 state.Money += 1
-                            } else if next == "W" {
+                            } else if slices.Contains(UNPASSABLE, next) {
                                 return nil
                             }
                             state.Tiles[i][j] = "_"
@@ -274,7 +304,7 @@ func move(state *GameState, direction Direction) error {
                             next := state.Tiles[i + 1][j]
                             if next == "$" {
                                 state.Money += 1
-                            } else if next == "W" {
+                            } else if slices.Contains(UNPASSABLE, next) {
                                 return nil
                             }
                             state.Tiles[i][j] = "_"
@@ -285,7 +315,7 @@ func move(state *GameState, direction Direction) error {
                             next := state.Tiles[i][j - 1]
                             if next == "$" {
                                 state.Money += 1
-                            } else if next == "W" {
+                            } else if slices.Contains(UNPASSABLE, next) {
                                 return nil
                             }
                             state.Tiles[i][j] = "_"
@@ -296,7 +326,7 @@ func move(state *GameState, direction Direction) error {
                             next := state.Tiles[i][j + 1]
                             if next == "$" {
                                 state.Money += 1
-                            } else if next == "W" {
+                            } else if slices.Contains(UNPASSABLE, next) {
                                 return nil
                             }
                             state.Tiles[i][j] = "_"
@@ -304,6 +334,34 @@ func move(state *GameState, direction Direction) error {
                         }
                     default:
                         return errors.New("Unrecognized Direction")
+                }
+                return nil
+            }
+        }
+    }
+    return errors.New("Couldn't find player")
+}
+
+func interact(state *GameState) error {
+    for i, row := range state.Tiles {
+        for j, value := range row {
+            if value == "P" {
+                if state.Tiles[i - 1][j] == "I" {
+                    state.Tiles[i - 1][j] = "i"
+                } else if state.Tiles[i - 1][j] == "i" {
+                    state.Tiles[i - 1][j] = "I"
+                } else if state.Tiles[i + 1][j] == "I" {
+                    state.Tiles[i + 1][j] = "i"
+                } else if state.Tiles[i + 1][j] == "i" {
+                    state.Tiles[i + 1][j] = "I"
+                } else if state.Tiles[i][j - 1] == "I" {
+                    state.Tiles[i][j - 1] = "i"
+                } else if state.Tiles[i][j - 1] == "i" {
+                    state.Tiles[i][j - 1] = "I"
+                } else if state.Tiles[i][j + 1] == "I" {
+                    state.Tiles[i][j + 1] = "i"
+                } else if state.Tiles[i][j + 1] == "i" {
+                    state.Tiles[i][j + 1] = "I"
                 }
                 return nil
             }

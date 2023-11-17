@@ -20,31 +20,35 @@
             <button class="mb-1">Save game</button>
             <input name="filename" placeholder="Save file name"></input>
         </form>
-        <hr />
-        <div
-            hx-post="/move/"
-            hx-target="#game-board"
-            hx-vals='{"direction": "MoveLeft"}'
-            hx-trigger="keyup[keyCode==72] from:body, keyup[keyCode==37] from:body"
-        ></div>
-        <div
-            hx-post="/move/"
-            hx-target="#game-board"
-            hx-vals='{"direction": "MoveDown"}'
-            hx-trigger="keyup[keyCode==74] from:body, keyup[keyCode==40] from:body"
-        ></div>
-        <div
-            hx-post="/move/"
-            hx-target="#game-board"
-            hx-vals='{"direction": "MoveUp"}'
-            hx-trigger="keyup[keyCode==75] from:body, keyup[keyCode==38] from:body"
-        ></div>
-        <div
-            hx-post="/move/"
-            hx-target="#game-board"
-            hx-vals='{"direction": "MoveRight"}'
-            hx-trigger="keyup[keyCode==76] from:body, keyup[keyCode==39] from:body"
-        ></div>
     </div>
+    <div
+        hx-post="/move/"
+        hx-target="#game-board"
+        hx-vals='{"direction": "MoveLeft"}'
+        hx-trigger="keyup[keyCode==72] from:body, keyup[keyCode==37] from:body"
+    ></div>
+    <div
+        hx-post="/move/"
+        hx-target="#game-board"
+        hx-vals='{"direction": "MoveDown"}'
+        hx-trigger="keyup[keyCode==74] from:body, keyup[keyCode==40] from:body"
+    ></div>
+    <div
+        hx-post="/move/"
+        hx-target="#game-board"
+        hx-vals='{"direction": "MoveUp"}'
+        hx-trigger="keyup[keyCode==75] from:body, keyup[keyCode==38] from:body"
+    ></div>
+    <div
+        hx-post="/move/"
+        hx-target="#game-board"
+        hx-vals='{"direction": "MoveRight"}'
+        hx-trigger="keyup[keyCode==76] from:body, keyup[keyCode==39] from:body"
+    ></div>
+    <div
+        hx-post="/interact/"
+        hx-target="#game-board"
+        hx-trigger="keyup[keyCode==80] from:body"
+    ></div>
 </div>
 
