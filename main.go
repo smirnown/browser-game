@@ -71,7 +71,7 @@ func main() {
                             state.Grid.Tiles[i][j] = "_"
                         }
                     }
-                    state.Grid.set(&state.player, "P")
+                    state.Grid.Tiles[3][2] = "P"
                     state.Grid.Tiles[8][8] = "$"
                     for i := 0; i < BOARD_SIZE; i++ {
                         if i == 2 {
