@@ -55,6 +55,7 @@ func main() {
             Tiles: make([][]string, BOARD_SIZE),
             Money: 0,
             leverMap: make(map[Point]Point),
+            player: Point { 3, 2 },
         }
         for {
             payload, ok := <- commandChan
@@ -70,7 +71,7 @@ func main() {
                             state.Tiles[i][j] = "_"
                         }
                     }
-                    state.Tiles[3][2] = "P"
+                    state.Tiles[state.player.x][state.player.y] = "P"
                     state.Tiles[8][8] = "$"
                     for i := 0; i < BOARD_SIZE; i++ {
                         if i == 2 {
@@ -132,6 +133,7 @@ type GameState struct {
     Tiles [][]string
     Money int
     leverMap map[Point]Point
+    player Point
 }
 
 type Point struct {
@@ -262,7 +264,13 @@ func loadState(filename string) (*GameState, error) {
     data := scanner.Text()
     tiles := make([][]string, BOARD_SIZE)
     last := 0
+    var player Point
     for i := 0; i < BOARD_SIZE; i++ {
+        row := data[last:last + BOARD_SIZE]
+        playerCol := strings.Index(row, "P")
+        if playerCol >= 0 {
+            player = Point { i, playerCol }
+        }
         tiles[i] = strings.Split(data[last:last + BOARD_SIZE], "")
         last += BOARD_SIZE
     }
@@ -311,7 +319,7 @@ func loadState(filename string) (*GameState, error) {
         leverMap[lever] = gate
     }
 
-    state := GameState { tiles, money, leverMap }
+    state := GameState { tiles, money, leverMap, player }
     return &state, nil
 }
 
@@ -339,62 +347,67 @@ func parseMovementDirection(value string) Command {
 }
 
 func move(state *GameState, direction Direction) error {
-    for i, row := range state.Tiles {
-        for j, value := range row {
-            if value == "P" {
-                switch direction {
-                    case Up:
-                        if i > 0 {
-                            next := state.Tiles[i - 1][j]
-                            if next == "$" {
-                                state.Money += 1
-                            } else if slices.Contains(UNPASSABLE, next) {
-                                return nil
-                            }
-                            state.Tiles[i][j] = "_"
-                            state.Tiles[i - 1][j] = "P"
-                        }
-                    case Down:
-                        if i < len(state.Tiles) - 1 {
-                            next := state.Tiles[i + 1][j]
-                            if next == "$" {
-                                state.Money += 1
-                            } else if slices.Contains(UNPASSABLE, next) {
-                                return nil
-                            }
-                            state.Tiles[i][j] = "_"
-                            state.Tiles[i + 1][j] = "P"
-                        }
-                    case Left:
-                        if j > 0 {
-                            next := state.Tiles[i][j - 1]
-                            if next == "$" {
-                                state.Money += 1
-                            } else if slices.Contains(UNPASSABLE, next) {
-                                return nil
-                            }
-                            state.Tiles[i][j] = "_"
-                            state.Tiles[i][j - 1] = "P"
-                        }
-                    case Right:
-                        if j < len(row) - 1 {
-                            next := state.Tiles[i][j + 1]
-                            if next == "$" {
-                                state.Money += 1
-                            } else if slices.Contains(UNPASSABLE, next) {
-                                return nil
-                            }
-                            state.Tiles[i][j] = "_"
-                            state.Tiles[i][j + 1] = "P"
-                        }
-                    default:
-                        return errors.New("Unrecognized Direction")
-                }
+    up := Point { state.player.x - 1, state.player.y }
+    down := Point { state.player.x + 1, state.player.y }
+    left := Point { state.player.x, state.player.y - 1 }
+    right := Point { state.player.x, state.player.y + 1 }
+    switch direction {
+        case Up:
+            if up.x < 0 {
                 return nil
             }
-        }
+            next := state.Tiles[up.x][up.y]
+            if next == "$" {
+                state.Money += 1
+            } else if slices.Contains(UNPASSABLE, next) {
+                return nil
+            }
+            state.Tiles[state.player.x][state.player.y] = "_"
+            state.Tiles[up.x][up.y] = "P"
+            state.player = up
+        case Down:
+            if down.x >= BOARD_SIZE {
+                return nil
+            }
+            next := state.Tiles[down.x][down.y]
+            if next == "$" {
+                state.Money += 1
+            } else if slices.Contains(UNPASSABLE, next) {
+                return nil
+            }
+            state.Tiles[state.player.x][state.player.y] = "_"
+            state.Tiles[down.x][down.y] = "P"
+            state.player = down
+        case Left:
+            if left.y < 0 {
+                return nil
+            }
+            next := state.Tiles[left.x][left.y]
+            if next == "$" {
+                state.Money += 1
+            } else if slices.Contains(UNPASSABLE, next) {
+                return nil
+            }
+            state.Tiles[state.player.x][state.player.y] = "_"
+            state.Tiles[left.x][left.y] = "P"
+            state.player = left
+        case Right:
+            if right.y >= BOARD_SIZE {
+                return nil
+            }
+            next := state.Tiles[right.x][right.y]
+            if next == "$" {
+                state.Money += 1
+            } else if slices.Contains(UNPASSABLE, next) {
+                return nil
+            }
+            state.Tiles[state.player.x][state.player.y] = "_"
+            state.Tiles[right.x][right.y] = "P"
+            state.player = right
+        default:
+            return errors.New("Unrecognized Direction")
     }
-    return errors.New("Couldn't find player")
+    return nil
 }
 
 func interact(state *GameState) error {
