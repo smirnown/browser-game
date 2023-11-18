@@ -359,66 +359,34 @@ func parseMovementDirection(value string) Command {
 }
 
 func move(state *GameState, direction Direction) error {
-    up := Point { state.player.x - 1, state.player.y }
-    down := Point { state.player.x + 1, state.player.y }
-    left := Point { state.player.x, state.player.y - 1 }
-    right := Point { state.player.x, state.player.y + 1 }
     switch direction {
         case Up:
-            if up.x < 0 {
-                return nil
-            }
-            next := state.Grid.value(&up)
-            if next == "$" {
-                state.Money += 1
-            } else if slices.Contains(UNPASSABLE, next) {
-                return nil
-            }
-            state.Grid.set(&state.player, "_")
-            state.Grid.set(&up, "P")
-            state.player = up
+            movePlayer(state, &Point { state.player.x - 1, state.player.y })
         case Down:
-            if down.x >= BOARD_SIZE {
-                return nil
-            }
-            next := state.Grid.value(&down)
-            if next == "$" {
-                state.Money += 1
-            } else if slices.Contains(UNPASSABLE, next) {
-                return nil
-            }
-            state.Grid.set(&state.player, "_")
-            state.Grid.set(&down, "P")
-            state.player = down
+            movePlayer(state, &Point { state.player.x + 1, state.player.y })
         case Left:
-            if left.y < 0 {
-                return nil
-            }
-            next := state.Grid.value(&left)
-            if next == "$" {
-                state.Money += 1
-            } else if slices.Contains(UNPASSABLE, next) {
-                return nil
-            }
-            state.Grid.set(&state.player, "_")
-            state.Grid.set(&left, "P")
-            state.player = left
+            movePlayer(state, &Point { state.player.x, state.player.y - 1 })
         case Right:
-            if right.y >= BOARD_SIZE {
-                return nil
-            }
-            next := state.Grid.value(&right)
-            if next == "$" {
-                state.Money += 1
-            } else if slices.Contains(UNPASSABLE, next) {
-                return nil
-            }
-            state.Grid.set(&state.player, "_")
-            state.Grid.set(&right, "P")
-            state.player = right
+            movePlayer(state, &Point { state.player.x, state.player.y + 1 })
         default:
             return errors.New("Unrecognized Direction")
     }
+    return nil
+}
+
+func movePlayer(state *GameState, next *Point) error {
+    if next.x < 0 || next.y < 0 || next.x >= BOARD_SIZE || next.y >= BOARD_SIZE {
+        return nil
+    }
+    val := state.Grid.value(next)
+    if val == "$" {
+        state.Money += 1
+    } else if slices.Contains(UNPASSABLE, val) {
+        return nil
+    }
+    state.Grid.set(&state.player, "_")
+    state.Grid.set(next, "P")
+    state.player = *next
     return nil
 }
 
