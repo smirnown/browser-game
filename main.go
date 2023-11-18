@@ -391,65 +391,27 @@ func movePlayer(state *GameState, next *Point) error {
 }
 
 func interact(state *GameState) error {
-    up := Point { state.player.x - 1, state.player.y }
-    down := Point { state.player.x + 1, state.player.y }
-    left := Point { state.player.x, state.player.y - 1 }
-    right := Point { state.player.x, state.player.y + 1 }
-    if state.player.x > 0 && state.Grid.value(&up) == "I" {
-        gate, ok := state.leverMap[up]
-        if !ok {
-            return errors.New("Lever doesn't exist in map!")
-        }
-        state.Grid.set(&up, "i")
+    toggleLever(state, &Point { state.player.x - 1, state.player.y })
+    toggleLever(state, &Point { state.player.x + 1, state.player.y })
+    toggleLever(state, &Point { state.player.x, state.player.y - 1 })
+    toggleLever(state, &Point { state.player.x, state.player.y + 1 })
+    return nil
+}
+
+func toggleLever(state *GameState, tile *Point) error {
+    if tile.x < 0 || tile.y < 0 || tile.x >= BOARD_SIZE || tile.y >= BOARD_SIZE {
+        return nil
+    }
+    gate, ok := state.leverMap[*tile]
+    if !ok {
+        return errors.New("Lever doesn't exist in map!")
+    }
+    lever := state.Grid.value(tile)
+    if lever == "I" {
+        state.Grid.set(tile, "i")
         state.Grid.set(&gate, "_")
-    } else if state.player.x > 0 && state.Grid.value(&up) == "i" {
-        gate, ok := state.leverMap[up]
-        if !ok {
-            return errors.New("Lever doesn't exist in map!")
-        }
-        state.Grid.set(&up, "I")
-        state.Grid.set(&gate, "H")
-    } else if state.player.x < BOARD_SIZE - 1 && state.Grid.value(&down) == "I" {
-        gate, ok := state.leverMap[down]
-        if !ok {
-            return errors.New("Lever doesn't exist in map!")
-        }
-        state.Grid.set(&down, "i")
-        state.Grid.set(&gate, "_")
-    } else if state.player.x < BOARD_SIZE - 1 && state.Grid.value(&down) == "i" {
-        gate, ok := state.leverMap[down]
-        if !ok {
-            return errors.New("Lever doesn't exist in map!")
-        }
-        state.Grid.set(&down, "I")
-        state.Grid.set(&gate, "H")
-    } else if state.player.y > 0 && state.Grid.value(&left) == "I" {
-        gate, ok := state.leverMap[left]
-        if !ok {
-            return errors.New("Lever doesn't exist in map!")
-        }
-        state.Grid.set(&left, "i")
-        state.Grid.set(&gate, "_")
-    } else if state.player.y > 0 && state.Grid.value(&left) == "i" {
-        gate, ok := state.leverMap[left]
-        if !ok {
-            return errors.New("Lever doesn't exist in map!")
-        }
-        state.Grid.set(&left, "I")
-        state.Grid.set(&gate, "H")
-    } else if state.player.y < BOARD_SIZE - 1 && state.Grid.value(&right) == "I" {
-        gate, ok := state.leverMap[right]
-        if !ok {
-            return errors.New("Lever doesn't exist in map!")
-        }
-        state.Grid.set(&right, "i")
-        state.Grid.set(&gate, "_")
-    } else if state.player.y < BOARD_SIZE - 1 && state.Grid.value(&right) == "i" {
-        gate, ok := state.leverMap[right]
-        if !ok {
-            return errors.New("Lever doesn't exist in map!")
-        }
-        state.Grid.set(&right, "I")
+    } else {
+        state.Grid.set(tile, "I")
         state.Grid.set(&gate, "H")
     }
     return nil
