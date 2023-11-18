@@ -52,7 +52,7 @@ func main() {
 
     go func() {
         state := GameState {
-            Tiles: make([][]string, BOARD_SIZE),
+            Tiles: Tiles { make([][]string, BOARD_SIZE) },
             Money: 0,
             leverMap: make(map[Point]Point),
             player: Point { 3, 2 },
@@ -64,28 +64,28 @@ func main() {
             }
             switch payload.command {
                 case Initialize:
-                    state.Tiles = make([][]string, BOARD_SIZE)
-                    for i := range state.Tiles {
-                        state.Tiles[i] = make([]string, BOARD_SIZE)
+                    state.Tiles = Tiles { make([][]string, BOARD_SIZE) }
+                    for i := range state.Tiles.Tiles {
+                        state.Tiles.Tiles[i] = make([]string, BOARD_SIZE)
                         for j := 0; j < BOARD_SIZE; j++ {
-                            state.Tiles[i][j] = "_"
+                            state.Tiles.Tiles[i][j] = "_"
                         }
                     }
-                    state.Tiles[state.player.x][state.player.y] = "P"
-                    state.Tiles[8][8] = "$"
+                    state.Tiles.set(&state.player, "P")
+                    state.Tiles.Tiles[8][8] = "$"
                     for i := 0; i < BOARD_SIZE; i++ {
                         if i == 2 {
-                            state.Tiles[i][6] = "H"
-                            state.Tiles[8][1] = "I"
+                            state.Tiles.Tiles[i][6] = "H"
+                            state.Tiles.Tiles[8][1] = "I"
                             state.leverMap[Point {8, 1}] = Point {i, 6}
                             continue
                         } else if i == 9 {
-                            state.Tiles[i][6] = "H"
-                            state.Tiles[2][1] = "I"
+                            state.Tiles.Tiles[i][6] = "H"
+                            state.Tiles.Tiles[2][1] = "I"
                             state.leverMap[Point {2, 1}] = Point {i, 6}
                             continue
                         }
-                        state.Tiles[i][6] = "W"
+                        state.Tiles.Tiles[i][6] = "W"
                     }
                     state.Money = 0
                     stateChan <- StateChannelResponse { state, nil }
@@ -130,10 +130,22 @@ func main() {
     HTTP HANDLERS
 ***************************/
 type GameState struct {
-    Tiles [][]string
+    Tiles Tiles
     Money int
     leverMap map[Point]Point
     player Point
+}
+
+type Tiles struct {
+    Tiles [][]string
+}
+
+func (t *Tiles) value(p *Point) string {
+    return t.Tiles[p.x][p.y]
+}
+
+func (t *Tiles) set(p *Point, v string) {
+    t.Tiles[p.x][p.y] = v
 }
 
 type Point struct {
@@ -236,7 +248,7 @@ func interactHandler(w http.ResponseWriter, r *http.Request) {
 ***************************/
 func saveState(state GameState, filename string) error {
     data := ""
-    for _, row := range state.Tiles {
+    for _, row := range state.Tiles.Tiles {
         data = data + strings.Join(row, "")
     }
     data += "\n" + strconv.Itoa(state.Money)
@@ -319,7 +331,7 @@ func loadState(filename string) (*GameState, error) {
         leverMap[lever] = gate
     }
 
-    state := GameState { tiles, money, leverMap, player }
+    state := GameState { Tiles { tiles }, money, leverMap, player }
     return &state, nil
 }
 
@@ -356,53 +368,53 @@ func move(state *GameState, direction Direction) error {
             if up.x < 0 {
                 return nil
             }
-            next := state.Tiles[up.x][up.y]
+            next := state.Tiles.value(&up)
             if next == "$" {
                 state.Money += 1
             } else if slices.Contains(UNPASSABLE, next) {
                 return nil
             }
-            state.Tiles[state.player.x][state.player.y] = "_"
-            state.Tiles[up.x][up.y] = "P"
+            state.Tiles.set(&state.player, "_")
+            state.Tiles.set(&up, "P")
             state.player = up
         case Down:
             if down.x >= BOARD_SIZE {
                 return nil
             }
-            next := state.Tiles[down.x][down.y]
+            next := state.Tiles.value(&down)
             if next == "$" {
                 state.Money += 1
             } else if slices.Contains(UNPASSABLE, next) {
                 return nil
             }
-            state.Tiles[state.player.x][state.player.y] = "_"
-            state.Tiles[down.x][down.y] = "P"
+            state.Tiles.set(&state.player, "_")
+            state.Tiles.set(&down, "P")
             state.player = down
         case Left:
             if left.y < 0 {
                 return nil
             }
-            next := state.Tiles[left.x][left.y]
+            next := state.Tiles.value(&left)
             if next == "$" {
                 state.Money += 1
             } else if slices.Contains(UNPASSABLE, next) {
                 return nil
             }
-            state.Tiles[state.player.x][state.player.y] = "_"
-            state.Tiles[left.x][left.y] = "P"
+            state.Tiles.set(&state.player, "_")
+            state.Tiles.set(&left, "P")
             state.player = left
         case Right:
             if right.y >= BOARD_SIZE {
                 return nil
             }
-            next := state.Tiles[right.x][right.y]
+            next := state.Tiles.value(&right)
             if next == "$" {
                 state.Money += 1
             } else if slices.Contains(UNPASSABLE, next) {
                 return nil
             }
-            state.Tiles[state.player.x][state.player.y] = "_"
-            state.Tiles[right.x][right.y] = "P"
+            state.Tiles.set(&state.player, "_")
+            state.Tiles.set(&right, "P")
             state.player = right
         default:
             return errors.New("Unrecognized Direction")
@@ -411,70 +423,67 @@ func move(state *GameState, direction Direction) error {
 }
 
 func interact(state *GameState) error {
-    for i, row := range state.Tiles {
-        for j, value := range row {
-            if value == "P" {
-                if i > 0 && state.Tiles[i - 1][j] == "I" {
-                    gate, ok := state.leverMap[Point { i - 1, j}]
-                    if !ok {
-                        return errors.New("Lever doesn't exist in map!")
-                    }
-                    state.Tiles[i - 1][j] = "i"
-                    state.Tiles[gate.x][gate.y] = "_"
-                } else if i > 0 && state.Tiles[i - 1][j] == "i" {
-                    gate, ok := state.leverMap[Point { i - 1, j}]
-                    if !ok {
-                        return errors.New("Lever doesn't exist in map!")
-                    }
-                    state.Tiles[i - 1][j] = "I"
-                    state.Tiles[gate.x][gate.y] = "H"
-                } else if i < BOARD_SIZE - 1 && state.Tiles[i + 1][j] == "I" {
-                    gate, ok := state.leverMap[Point { i + 1, j}]
-                    if !ok {
-                        return errors.New("Lever doesn't exist in map!")
-                    }
-                    state.Tiles[i + 1][j] = "i"
-                    state.Tiles[gate.x][gate.y] = "_"
-                } else if i < BOARD_SIZE - 1 && state.Tiles[i + 1][j] == "i" {
-                    gate, ok := state.leverMap[Point { i + 1, j}]
-                    if !ok {
-                        return errors.New("Lever doesn't exist in map!")
-                    }
-                    state.Tiles[i + 1][j] = "I"
-                    state.Tiles[gate.x][gate.y] = "H"
-                } else if j > 0 && state.Tiles[i][j - 1] == "I" {
-                    gate, ok := state.leverMap[Point { i, j - 1}]
-                    if !ok {
-                        return errors.New("Lever doesn't exist in map!")
-                    }
-                    state.Tiles[i][j - 1] = "i"
-                    state.Tiles[gate.x][gate.y] = "_"
-                } else if j > 0 && state.Tiles[i][j - 1] == "i" {
-                    gate, ok := state.leverMap[Point { i, j - 1}]
-                    if !ok {
-                        return errors.New("Lever doesn't exist in map!")
-                    }
-                    state.Tiles[i][j - 1] = "I"
-                    state.Tiles[gate.x][gate.y] = "H"
-                } else if j < BOARD_SIZE - 1 && state.Tiles[i][j + 1] == "I" {
-                    gate, ok := state.leverMap[Point { i, j + 1}]
-                    if !ok {
-                        return errors.New("Lever doesn't exist in map!")
-                    }
-                    state.Tiles[i][j + 1] = "i"
-                    state.Tiles[gate.x][gate.y] = "_"
-                } else if j < BOARD_SIZE - 1 && state.Tiles[i][j + 1] == "i" {
-                    gate, ok := state.leverMap[Point { i, j + 1}]
-                    if !ok {
-                        return errors.New("Lever doesn't exist in map!")
-                    }
-                    state.Tiles[i][j + 1] = "I"
-                    state.Tiles[gate.x][gate.y] = "H"
-                }
-                return nil
-            }
+    up := Point { state.player.x - 1, state.player.y }
+    down := Point { state.player.x + 1, state.player.y }
+    left := Point { state.player.x, state.player.y - 1 }
+    right := Point { state.player.x, state.player.y + 1 }
+    if state.player.x > 0 && state.Tiles.value(&up) == "I" {
+        gate, ok := state.leverMap[up]
+        if !ok {
+            return errors.New("Lever doesn't exist in map!")
         }
+        state.Tiles.set(&up, "i")
+        state.Tiles.set(&gate, "_")
+    } else if state.player.x > 0 && state.Tiles.value(&up) == "i" {
+        gate, ok := state.leverMap[up]
+        if !ok {
+            return errors.New("Lever doesn't exist in map!")
+        }
+        state.Tiles.set(&up, "I")
+        state.Tiles.set(&gate, "H")
+    } else if state.player.x < BOARD_SIZE - 1 && state.Tiles.value(&down) == "I" {
+        gate, ok := state.leverMap[down]
+        if !ok {
+            return errors.New("Lever doesn't exist in map!")
+        }
+        state.Tiles.set(&down, "i")
+        state.Tiles.set(&gate, "_")
+    } else if state.player.x < BOARD_SIZE - 1 && state.Tiles.value(&down) == "i" {
+        gate, ok := state.leverMap[down]
+        if !ok {
+            return errors.New("Lever doesn't exist in map!")
+        }
+        state.Tiles.set(&down, "I")
+        state.Tiles.set(&gate, "H")
+    } else if state.player.y > 0 && state.Tiles.value(&left) == "I" {
+        gate, ok := state.leverMap[left]
+        if !ok {
+            return errors.New("Lever doesn't exist in map!")
+        }
+        state.Tiles.set(&left, "i")
+        state.Tiles.set(&gate, "_")
+    } else if state.player.y > 0 && state.Tiles.value(&left) == "i" {
+        gate, ok := state.leverMap[left]
+        if !ok {
+            return errors.New("Lever doesn't exist in map!")
+        }
+        state.Tiles.set(&left, "I")
+        state.Tiles.set(&gate, "H")
+    } else if state.player.y < BOARD_SIZE - 1 && state.Tiles.value(&right) == "I" {
+        gate, ok := state.leverMap[right]
+        if !ok {
+            return errors.New("Lever doesn't exist in map!")
+        }
+        state.Tiles.set(&right, "i")
+        state.Tiles.set(&gate, "_")
+    } else if state.player.y < BOARD_SIZE - 1 && state.Tiles.value(&right) == "i" {
+        gate, ok := state.leverMap[right]
+        if !ok {
+            return errors.New("Lever doesn't exist in map!")
+        }
+        state.Tiles.set(&right, "I")
+        state.Tiles.set(&gate, "H")
     }
-    return errors.New("Couldn't find player")
+    return nil
 }
 
