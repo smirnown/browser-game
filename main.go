@@ -140,7 +140,7 @@ type Grid struct {
     Tiles [][]string
 }
 
-func (g *Grid) value(p *Point) string {
+func (g *Grid) get(p *Point) string {
     return g.Tiles[p.x][p.y]
 }
 
@@ -378,7 +378,7 @@ func movePlayer(state *GameState, next *Point) error {
     if next.x < 0 || next.y < 0 || next.x >= BOARD_SIZE || next.y >= BOARD_SIZE {
         return nil
     }
-    val := state.Grid.value(next)
+    val := state.Grid.get(next)
     if val == "$" {
         state.Money += 1
     } else if slices.Contains(UNPASSABLE, val) {
@@ -406,7 +406,7 @@ func toggleLever(state *GameState, tile *Point) error {
     if !ok {
         return errors.New("Lever doesn't exist in map!")
     }
-    lever := state.Grid.value(tile)
+    lever := state.Grid.get(tile)
     if lever == "I" {
         state.Grid.set(tile, "i")
         state.Grid.set(&gate, "_")
