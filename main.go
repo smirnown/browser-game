@@ -14,6 +14,7 @@ import (
 )
 
 var BOARD_SIZE = 10
+var VISIBLE_BOARD_SIZE = 7
 var UNPASSABLE = []string {"W", "H", "I", "i"}
 
 type CommandPayload struct {
@@ -131,6 +132,25 @@ func main() {
 /***************************
     HTTP HANDLERS
 ***************************/
+type Board struct {
+    Grid Grid
+    Money int
+}
+
+func constructBoard(state *GameState) Board {
+    tiles := make([][]string, VISIBLE_BOARD_SIZE)
+    minX := max(0, state.player.x - VISIBLE_BOARD_SIZE + 1)
+    minY := max(0, state.player.y - VISIBLE_BOARD_SIZE + 1)
+    for i := range tiles {
+        tiles[i] = make([]string, VISIBLE_BOARD_SIZE)
+        for j := 0; j < VISIBLE_BOARD_SIZE; j++ {
+            tiles[i][j] = state.Grid.Tiles[minX + i][minY + j]
+        }
+    }
+    grid := Grid { tiles }
+    return Board { grid, state.Money }
+}
+
 type GameState struct {
     Grid Grid
     Money int
@@ -157,7 +177,7 @@ type Point struct {
 
 func rootHandler(w http.ResponseWriter, r *http.Request) {
     tmpl := template.Must(template.ParseFiles("index.html"))
-    config := make(map[string]GameState)
+    config := make(map[string]Board)
     err := tmpl.Execute(w, config)
     if err != nil {
         panic(err)
@@ -172,8 +192,8 @@ func initializeHandler(w http.ResponseWriter, r *http.Request) {
     if resp.err != nil {
         panic(resp.err)
     }
-    config := map[string] GameState {
-        "GameState": resp.state,
+    config := map[string] Board {
+        "Board": constructBoard(&resp.state),
     }
     err := tmpl.Execute(w, config)
     if err != nil {
@@ -199,8 +219,8 @@ func loadHandler(w http.ResponseWriter, r *http.Request) {
     if resp.err != nil {
         panic(resp.err)
     }
-    config := map[string] GameState {
-        "GameState": resp.state,
+    config := map[string] Board {
+        "Board": constructBoard(&resp.state),
     }
     tmpl := template.Must(template.ParseFiles("game-board.html"))
     err := tmpl.Execute(w, config)
@@ -218,8 +238,8 @@ func moveHandler(w http.ResponseWriter, r *http.Request) {
     if resp.err != nil {
         panic(resp.err)
     }
-    config := map[string]GameState {
-        "GameState": resp.state,
+    config := map[string] Board {
+        "Board": constructBoard(&resp.state),
     }
     tmpl := template.Must(template.ParseFiles("game-board.html"))
     err := tmpl.ExecuteTemplate(w, "game-board", config)
@@ -235,8 +255,8 @@ func interactHandler(w http.ResponseWriter, r *http.Request) {
     if resp.err != nil {
         panic(resp.err)
     }
-    config := map[string]GameState {
-        "GameState": resp.state,
+    config := map[string] Board {
+        "Board": constructBoard(&resp.state),
     }
     tmpl := template.Must(template.ParseFiles("game-board.html"))
     err := tmpl.ExecuteTemplate(w, "game-board", config)
@@ -392,6 +412,7 @@ func movePlayer(state *GameState, next *Point) error {
     return nil
 }
 
+// TODO: Support interacting in only one direction
 func interact(state *GameState) error {
     toggleLever(state, &Point { state.player.x - 1, state.player.y })
     toggleLever(state, &Point { state.player.x + 1, state.player.y })

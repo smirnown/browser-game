@@ -1,7 +1,7 @@
 <div class="row m-3" id="game-ui">
     <div class="col-2 bg-light" id="game-board">
         {{ block "game-board" . }}
-            {{ range .GameState.Grid.Tiles }}
+            {{ range .Board.Grid.Tiles }}
                 <div class="m-1 d-flex">
                     {{ range . }}
                         <div style="width: 20px">
@@ -11,7 +11,7 @@
                 </div>
             {{ end }}
             Money
-            {{ .GameState.Money }}
+            {{ .Board.Money }}
         {{ end }}
     </div>
     <div class="col-1"></div>
